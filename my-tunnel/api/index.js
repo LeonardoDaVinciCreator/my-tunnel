@@ -13,19 +13,19 @@ const PROVIDERS = [
     model: "deepseek-v4.1-flash:free"
   },
   {
+    id: "cloudflare",
+    name: "Cloudflare",
+    url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
+    // Актуальная бесплатная модель, которая точно работает
+    model: "@cf/qwen/qwen3.8-27b" 
+  },
+  {
     id: "gemini",
     name: "Gemini",
     url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     apiKey: process.env.GEMINI_API_KEY || "",
     model: "gemini-2.5-flash"
-  },
-  {
-    id: "cloudflare",
-    name: "Cloudflare",
-    url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
-    apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    // Заменили на бесплатную и актуальную модель
-    model: "@cf/qwen/qwen3-30b-a3b-fp8" 
   }
 ];
 
@@ -86,20 +86,13 @@ export default async function handler(req) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-        const headers = {
-          "Content-Type": "application/json",
-        };
-
-        // Магия для ключа Gemini (AQ....)
-        if (provider.id === "gemini") {
-          headers["x-goog-api-key"] = provider.apiKey;
-        } else {
-          headers["Authorization"] = `Bearer ${provider.apiKey}`;
-        }
-
+        // Убрали "магию" с x-goog-api-key, так как с ключами AQ. это не работает
         const res = await fetch(provider.url, {
           method: "POST",
-          headers: headers,
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${provider.apiKey}`,
+          },
           body: JSON.stringify({
             ...body,
             model: provider.model,
