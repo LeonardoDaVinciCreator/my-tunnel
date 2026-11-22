@@ -81,26 +81,35 @@ export default async function handler(req) {
     });
 
     for (const provider of sortedProviders) {
-      if (!provider.apiKey || provider.apiKey.trim() === "") continue;
+  if (!provider.apiKey || provider.apiKey.trim() === "") continue;
 
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-        const res = await fetch(provider.url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${provider.apiKey}`,
-          },
-          body: JSON.stringify({
-            ...body,
-            model: provider.model,
-          }),
-          signal: controller.signal
-        });
+    // Формируем заголовки
+    const headers = {
+      "Content-Type": "application/json",
+    };
 
-        clearTimeout(timeoutId);
+    // Если это Gemini — используем x-goog-api-key, иначе Authorization: Bearer
+    if (provider.id === "gemini") {
+      headers["x-goog-api-key"] = provider.apiKey;
+    } else {
+      headers["Authorization"] = `Bearer ${provider.apiKey}`;
+    }
+
+    const res = await fetch(provider.url, {
+      method: "POST",
+      headers: headers, // <-- передаем сформированные заголовки
+      body: JSON.stringify({
+        ...body,
+        model: provider.model,
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);   
 
         if (res.ok) {
           console.log(`[SUCCESS] Ответ от: ${provider.name} (${provider.model})`);
