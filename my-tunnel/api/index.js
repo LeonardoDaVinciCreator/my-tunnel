@@ -1,7 +1,3 @@
-export const config = {
-  runtime: 'edge',
-};
-
 const MY_SECRET_KEY = "my-secret-password-123";
 
 const PROVIDERS = [
