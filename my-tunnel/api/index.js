@@ -26,9 +26,10 @@ const PROVIDERS = [
 ];
 
 export default async function handler(req) {
-  const url = new URL(req.url);
+  // Используем безопасное получение пути, чтобы не падало на '/'
+  const pathname = new URL(req.url, "http://localhost").pathname;
 
-  // 1. Обработка CORS
+  // 1. CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -40,7 +41,7 @@ export default async function handler(req) {
     });
   }
 
-  // 2. Проверка авторизации
+  // 2. Авторизация
   const auth = req.headers.get("Authorization");
   if (auth !== `Bearer ${MY_SECRET_KEY}`) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -49,8 +50,8 @@ export default async function handler(req) {
     });
   }
 
-  // 3. Эндпоинт списка моделей
-  if (url.pathname.endsWith("/models")) {
+  // 3. Список моделей
+  if (pathname.endsWith("/models")) {
     return new Response(JSON.stringify({
       object: "list",
       data: [{ id: "auto-router", object: "model" }]
@@ -59,8 +60,8 @@ export default async function handler(req) {
     });
   }
 
-  // 4. Эндпоинт чата
-  if (url.pathname.endsWith("/chat/completions") && req.method === "POST") {
+  // 4. Чат
+  if (pathname.endsWith("/chat/completions") && req.method === "POST") {
     let body;
     try {
       body = await req.json();
@@ -76,7 +77,7 @@ export default async function handler(req) {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // Увеличили до 30 сек
 
         const res = await fetch(provider.url, {
           method: "POST",
@@ -94,7 +95,6 @@ export default async function handler(req) {
         clearTimeout(timeoutId);
 
         if (res.ok) {
-          // Возвращаем ответ как поток (для стриминга SSE)
           return new Response(res.body, { 
             status: res.status, 
             headers: {
@@ -105,7 +105,7 @@ export default async function handler(req) {
             } 
           });
         } else {
-          console.error(`[Proxy] ${provider.name} failed with status: ${res.status}`);
+            console.error(`[Proxy] ${provider.name} failed with status: ${res.status}`);
         }
       } catch (e) {
         console.error(`[Proxy] ${provider.name} network error:`, e.message);
@@ -118,7 +118,7 @@ export default async function handler(req) {
     });
   }
 
-  // 5. Корневой маршрут
+  // 5. Корень сайта
   return new Response("Tunnel is active", { 
     status: 200,
     headers: { "Access-Control-Allow-Origin": "*" }
