@@ -17,7 +17,6 @@ const PROVIDERS = [
     name: "Cloudflare",
     url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
     apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    // Актуальная бесплатная модель, которая точно работает
     model: "@cf/qwen/qwen3.8-27b" 
   },
   {
@@ -86,13 +85,22 @@ export default async function handler(req) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-        // Убрали "магию" с x-goog-api-key, так как с ключами AQ. это не работает
+        // Формируем заголовки в зависимости от провайдера
+        const headers = {
+          "Content-Type": "application/json",
+        };
+
+        // Если это Gemini (ключи нового формата AQ.), используем x-goog-api-key
+        if (provider.id === "gemini") {
+          headers["x-goog-api-key"] = provider.apiKey;
+        } else {
+          // Для TokenHarbor и Cloudflare оставляем стандартный Bearer
+          headers["Authorization"] = `Bearer ${provider.apiKey}`;
+        }
+
         const res = await fetch(provider.url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${provider.apiKey}`,
-          },
+          headers: headers,
           body: JSON.stringify({
             ...body,
             model: provider.model,
