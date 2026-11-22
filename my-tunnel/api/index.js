@@ -24,7 +24,8 @@ const PROVIDERS = [
     name: "Cloudflare",
     url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
     apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    model: "@cf/deepseek-ai/deepseek-v4-flash-0731"
+    // Заменили на бесплатную и актуальную модель
+    model: "@cf/qwen/qwen3-30b-a3b-fp8" 
   }
 ];
 
@@ -50,7 +51,6 @@ export default async function handler(req) {
     });
   }
 
-  // Возвращаем список моделей для OpenCode
   if (pathname.endsWith("/models")) {
     return new Response(JSON.stringify({
       object: "list",
@@ -73,7 +73,6 @@ export default async function handler(req) {
 
     const requestedModel = body.model || "auto-router";
 
-    // Сортируем провайдеров: выбранный пользователем — первым
     const sortedProviders = [...PROVIDERS].sort((a, b) => {
       if (a.id === requestedModel) return -1;
       if (b.id === requestedModel) return 1;
@@ -81,35 +80,34 @@ export default async function handler(req) {
     });
 
     for (const provider of sortedProviders) {
-  if (!provider.apiKey || provider.apiKey.trim() === "") continue;
+      if (!provider.apiKey || provider.apiKey.trim() === "") continue;
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    // Формируем заголовки
-    const headers = {
-      "Content-Type": "application/json",
-    };
+        const headers = {
+          "Content-Type": "application/json",
+        };
 
-    // Если это Gemini — используем x-goog-api-key, иначе Authorization: Bearer
-    if (provider.id === "gemini") {
-      headers["x-goog-api-key"] = provider.apiKey;
-    } else {
-      headers["Authorization"] = `Bearer ${provider.apiKey}`;
-    }
+        // Магия для ключа Gemini (AQ....)
+        if (provider.id === "gemini") {
+          headers["x-goog-api-key"] = provider.apiKey;
+        } else {
+          headers["Authorization"] = `Bearer ${provider.apiKey}`;
+        }
 
-    const res = await fetch(provider.url, {
-      method: "POST",
-      headers: headers, // <-- передаем сформированные заголовки
-      body: JSON.stringify({
-        ...body,
-        model: provider.model,
-      }),
-      signal: controller.signal
-    });
+        const res = await fetch(provider.url, {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({
+            ...body,
+            model: provider.model,
+          }),
+          signal: controller.signal
+        });
 
-    clearTimeout(timeoutId);   
+        clearTimeout(timeoutId);   
 
         if (res.ok) {
           console.log(`[SUCCESS] Ответ от: ${provider.name} (${provider.model})`);
