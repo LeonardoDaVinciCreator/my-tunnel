@@ -1,3 +1,7 @@
+export const config = {
+  runtime: 'edge',
+};
+
 const MY_SECRET_KEY = "my-secret-password-123";
 
 const PROVIDERS = [
@@ -24,6 +28,7 @@ const PROVIDERS = [
 export default async function handler(req) {
   const url = new URL(req.url);
 
+  // 1. Обработка CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -35,6 +40,7 @@ export default async function handler(req) {
     });
   }
 
+  // 2. Проверка авторизации
   const auth = req.headers.get("Authorization");
   if (auth !== `Bearer ${MY_SECRET_KEY}`) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -43,6 +49,7 @@ export default async function handler(req) {
     });
   }
 
+  // 3. Эндпоинт списка моделей
   if (url.pathname.endsWith("/models")) {
     return new Response(JSON.stringify({
       object: "list",
@@ -52,16 +59,24 @@ export default async function handler(req) {
     });
   }
 
+  // 4. Эндпоинт чата
   if (url.pathname.endsWith("/chat/completions") && req.method === "POST") {
-    const body = await req.clone().json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
     for (const provider of PROVIDERS) {
-      
-      if (!provider.apiKey || provider.apiKey.trim() === "") continue; 
+      if (!provider.apiKey || provider.apiKey.trim() === "") continue;
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
 
         const res = await fetch(provider.url, {
           method: "POST",
@@ -79,16 +94,21 @@ export default async function handler(req) {
         clearTimeout(timeoutId);
 
         if (res.ok) {
+          // Возвращаем ответ как поток (для стриминга SSE)
           return new Response(res.body, { 
             status: res.status, 
             headers: {
-              "Content-Type": res.headers.get("Content-Type") || "application/json",
-              "Access-Control-Allow-Origin": "*"
+              "Content-Type": res.headers.get("Content-Type") || "text/event-stream",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "no-cache",
+              "X-Accel-Buffering": "no"
             } 
           });
+        } else {
+          console.error(`[Proxy] ${provider.name} failed with status: ${res.status}`);
         }
       } catch (e) {
-        console.error(`[Proxy] ${provider.name} failed:`, e.message);
+        console.error(`[Proxy] ${provider.name} network error:`, e.message);
       }
     }
 
@@ -98,6 +118,7 @@ export default async function handler(req) {
     });
   }
 
+  // 5. Корневой маршрут
   return new Response("Tunnel is active", { 
     status: 200,
     headers: { "Access-Control-Allow-Origin": "*" }
