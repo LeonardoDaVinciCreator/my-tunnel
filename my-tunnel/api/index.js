@@ -8,26 +8,26 @@ const PROVIDERS = [
   {
     id: "tokenharbor",
     name: "TokenHarbor",
-    url: "https://tokenharbor.ai/v1/chat/completions",
+    url: "https://tokenharbor.ai",
     apiKey: process.env.TOKENHARBOR_API_KEY || "",
     model: "deepseek-v4.1-flash:free"
   },
   {
     id: "cloudflare",
     name: "Cloudflare",
-    url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    url: `https://cloudflare.com{process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
     apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    // Проверьте актуальный slug модели в панели Cloudflare Workers AI
-    model: "@cf/qwen/qwq-32b" 
+    model: "@cf/qwen/qwen3.8-27b" 
   },
   {
     id: "gemini",
     name: "Gemini",
-    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    url: "https://googleapis.com",
     apiKey: process.env.GEMINI_API_KEY || "",
-    model: "gemini-2.5-flash"
+    model: "gemini-3.8-flash"
   }
 ];
+
 
 export default async function handler(req) {
   const pathname = new URL(req.url, "http://localhost").pathname;
