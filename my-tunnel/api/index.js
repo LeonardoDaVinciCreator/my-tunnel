@@ -6,30 +6,31 @@ const MY_SECRET_KEY = "my-secret-password-123";
 
 const PROVIDERS = [
   {
+    id: "tokenharbor",
     name: "TokenHarbor",
     url: "https://tokenharbor.ai/v1/chat/completions",
     apiKey: process.env.TOKENHARBOR_API_KEY || "",
     model: "deepseek-v4.1-flash:free"
   },
   {
-    name: "Cloudflare",
-    url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
-    apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    model: "@cf/meta/llama-3.1-8b-instruct"
-  },
-  {
+    id: "gemini",
     name: "Gemini",
     url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     apiKey: process.env.GEMINI_API_KEY || "",
     model: "gemini-2.5-flash"
+  },
+  {
+    id: "cloudflare",
+    name: "Cloudflare",
+    url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
+    model: "@cf/meta/llama-3.1-8b-instruct"
   }
 ];
 
 export default async function handler(req) {
-  // Используем безопасное получение пути, чтобы не падало на '/'
   const pathname = new URL(req.url, "http://localhost").pathname;
 
-  // 1. CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -41,7 +42,6 @@ export default async function handler(req) {
     });
   }
 
-  // 2. Авторизация
   const auth = req.headers.get("Authorization");
   if (auth !== `Bearer ${MY_SECRET_KEY}`) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -50,17 +50,16 @@ export default async function handler(req) {
     });
   }
 
-  // 3. Список моделей
+  // Возвращаем список моделей для OpenCode
   if (pathname.endsWith("/models")) {
     return new Response(JSON.stringify({
       object: "list",
-      data: [{ id: "auto-router", object: "model" }]
+      data: PROVIDERS.map(p => ({ id: p.id, object: "model" }))
     }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
     });
   }
 
-  // 4. Чат
   if (pathname.endsWith("/chat/completions") && req.method === "POST") {
     let body;
     try {
@@ -72,12 +71,21 @@ export default async function handler(req) {
       });
     }
 
-    for (const provider of PROVIDERS) {
+    const requestedModel = body.model || "auto-router";
+
+    // Сортируем провайдеров: выбранный пользователем — первым
+    const sortedProviders = [...PROVIDERS].sort((a, b) => {
+      if (a.id === requestedModel) return -1;
+      if (b.id === requestedModel) return 1;
+      return 0;
+    });
+
+    for (const provider of sortedProviders) {
       if (!provider.apiKey || provider.apiKey.trim() === "") continue;
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // Увеличили до 30 сек
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         const res = await fetch(provider.url, {
           method: "POST",
@@ -96,18 +104,17 @@ export default async function handler(req) {
 
         if (res.ok) {
           console.log(`[SUCCESS] Ответ от: ${provider.name} (${provider.model})`);
-          
-          return new Response(res.body, { 
-            status: res.status, 
+          return new Response(res.body, {
+            status: res.status,
             headers: {
               "Content-Type": res.headers.get("Content-Type") || "text/event-stream",
               "Access-Control-Allow-Origin": "*",
               "Cache-Control": "no-cache",
               "X-Accel-Buffering": "no"
-            } 
+            }
           });
         } else {
-            console.error(`[Proxy] ${provider.name} failed with status: ${res.status}`);
+          console.error(`[Proxy] ${provider.name} failed: ${res.status}`);
         }
       } catch (e) {
         console.error(`[Proxy] ${provider.name} network error:`, e.message);
@@ -120,9 +127,5 @@ export default async function handler(req) {
     });
   }
 
-  // 5. Корень сайта
-  return new Response("Tunnel is active", { 
-    status: 200,
-    headers: { "Access-Control-Allow-Origin": "*" }
-  });
+  return new Response("Tunnel is active", { status: 200 });
 }
