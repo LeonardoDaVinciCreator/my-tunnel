@@ -24,7 +24,7 @@ const PROVIDERS = [
     name: "Cloudflare",
     url: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
     apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    model: "@cf/meta/llama-3.1-8b-instruct"
+    model: "@cf/deepseek-ai/deepseek-v4-flash-0731"
   }
 ];
 
