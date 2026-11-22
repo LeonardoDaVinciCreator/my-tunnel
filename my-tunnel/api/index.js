@@ -11,24 +11,8 @@ const PROVIDERS = [
     url: "https://tokenharbor.ai" + "/v1/chat/completions",
     apiKey: process.env.TOKENHARBOR_API_KEY || "",
     model: "deepseek-v4.1-flash:free"
-  },
-  {
-    id: "cloudflare",
-    name: "Cloudflare",
-    url: "https://cloudflare.com" + process.env.CLOUDFLARE_ACCOUNT_ID + "/ai/v1/chat/completions",
-    apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
-    model: "@cf/qwen/qwen3.8-27b" 
-  },
-  {
-    id: "gemini",
-    name: "Gemini",
-    url: "https://generativelanguage.googleapis.com" + "/v1beta/openai/chat/completions",
-    apiKey: process.env.GEMINI_API_KEY || "",
-    model: "gemini-3.8-flash"
   }
 ];
-
-
 
 export default async function handler(req) {
   const pathname = new URL(req.url, "http://localhost").pathname;
@@ -72,15 +56,15 @@ export default async function handler(req) {
       });
     }
 
-    const requestedModel = body.model || "auto-router";
+    const provider = PROVIDERS[0];
 
-    const sortedProviders = [...PROVIDERS].sort((a, b) => {
-      if (a.id === requestedModel) return -1;
-      if (b.id === requestedModel) return 1;
-      return 0;
-    });
+    if (!provider.apiKey || provider.apiKey.trim() === "") {
+      return new Response(JSON.stringify({ error: "API key is missing" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
+    }
 
-    // Оставляем только базовые поля, которые понимают все OpenAI-совместимые API
     const cleanPayload = {
       messages: body.messages,
       stream: Boolean(body.stream),
@@ -88,54 +72,51 @@ export default async function handler(req) {
       ...(body.max_tokens !== undefined && { max_tokens: body.max_tokens }),
     };
 
-    for (const provider of sortedProviders) {
-      if (!provider.apiKey || provider.apiKey.trim() === "") continue;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+    try {
+      const res = await fetch(provider.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify({
+          ...cleanPayload,
+          model: provider.model,
+        }),
+        signal: controller.signal
+      });
 
-      try {
-        const res = await fetch(provider.url, {
-          method: "POST",
+      if (res.ok) {
+        console.log(`[SUCCESS] Ответ от: ${provider.name} (${provider.model})`);
+        return new Response(res.body, {
+          status: res.status,
           headers: {
-            "Content-Type": "application/json",
-            // Все три эндпоинта (включая Gemini /openai/) ждут Bearer
-            "Authorization": `Bearer ${provider.apiKey}`,
-          },
-          body: JSON.stringify({
-            ...cleanPayload,
-            model: provider.model,
-          }),
-          signal: controller.signal
+            "Content-Type": res.headers.get("Content-Type") || "text/event-stream",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+          }
         });
-
-        if (res.ok) {
-          console.log(`[SUCCESS] Ответ от: ${provider.name} (${provider.model})`);
-          return new Response(res.body, {
-            status: res.status,
-            headers: {
-              "Content-Type": res.headers.get("Content-Type") || "text/event-stream",
-              "Access-Control-Allow-Origin": "*",
-              "Cache-Control": "no-cache",
-              "X-Accel-Buffering": "no"
-            }
-          });
-        } else {
-          // Читаем тело ошибки, чтобы точно знать, на что ругается API
-          const errText = await res.text();
-          console.error(`[Proxy] ${provider.name} failed (${res.status}): ${errText}`);
-        }
-      } catch (e) {
-        console.error(`[Proxy] ${provider.name} network error:`, e.message);
-      } finally {
-        clearTimeout(timeoutId);
+      } else {
+        const errText = await res.text();
+        console.error(`[Proxy] ${provider.name} failed (${res.status}): ${errText}`);
+        return new Response(errText, {
+          status: res.status,
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
       }
+    } catch (e) {
+      console.error(`[Proxy] ${provider.name} network error:`, e.message);
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: 502,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return new Response(JSON.stringify({ error: "All providers failed or exhausted" }), {
-      status: 502,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-    });
   }
 
   return new Response("Tunnel is active", { status: 200 });
