@@ -95,6 +95,8 @@ export default async function handler(req) {
         clearTimeout(timeoutId);
 
         if (res.ok) {
+          console.log(`[SUCCESS] Ответ от: ${provider.name} (${provider.model})`);
+          
           return new Response(res.body, { 
             status: res.status, 
             headers: {
