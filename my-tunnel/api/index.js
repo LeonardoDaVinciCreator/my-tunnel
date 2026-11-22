@@ -8,25 +8,26 @@ const PROVIDERS = [
   {
     id: "tokenharbor",
     name: "TokenHarbor",
-    url: "https://tokenharbor.ai",
+    url: "https://tokenharbor.ai" + "/v1/chat/completions",
     apiKey: process.env.TOKENHARBOR_API_KEY || "",
     model: "deepseek-v4.1-flash:free"
   },
   {
     id: "cloudflare",
     name: "Cloudflare",
-    url: `https://cloudflare.com{process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    url: "https://cloudflare.com" + process.env.CLOUDFLARE_ACCOUNT_ID + "/ai/v1/chat/completions",
     apiKey: process.env.CLOUDFLARE_API_TOKEN || "",
     model: "@cf/qwen/qwen3.8-27b" 
   },
   {
     id: "gemini",
     name: "Gemini",
-    url: "https://googleapis.com",
+    url: "https://generativelanguage.googleapis.com" + "/v1beta/openai/chat/completions",
     apiKey: process.env.GEMINI_API_KEY || "",
     model: "gemini-3.8-flash"
   }
 ];
+
 
 
 export default async function handler(req) {
